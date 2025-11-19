@@ -1,0 +1,125 @@
+# -------- OS FILES --------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.Trash-*
+
+# -------- GENERAL IDE/EDITOR --------
+# VS Code
+.vscode/
+.history/
+
+# JetBrains (IntelliJ, WebStorm, PyCharm, etc.)
+.idea/
+*.iml
+out/
+*.ipr
+*.iws
+
+# Sublime
+*.sublime-workspace
+*.sublime-project
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Env files (make sure this is what you want ignored)
+.env
+.env.local
+.env.*.local
+
+# -------- DEPENDENCIES --------
+node_modules/
+jspm_packages/
+bower_components/
+
+# Python
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+dbEnv/
+
+# Ruby
+.bundle/
+vendor/bundle/
+*.gem
+
+# PHP / Composer
+vendor/
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+target/
+build/
+
+# Go
+bin/
+*.exe
+*.test
+*.out
+
+# Rust
+target/
+**/*.rs.bk
+
+# -------- BUILD / DIST OUTPUT --------
+dist/
+build/
+coverage/
+.coverage
+*.lcov
+
+# -------- TEST / TEMP --------
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+.nyc_output/
+
+# -------- PROJECT SPECIFIC (UNCOMMENT IF NEEDED) --------
+# TypeScript
+# *.tsbuildinfo
+
+# Next.js / Nuxt / Remix
+# .next/
+# .nuxt/
+# .vercel/
+
+# React Native / Expo
+# .expo/
+# .expo-shared/
+
+# Django / Flask
+# *.sqlite3
+# instance/
+# media/
+
+# Misc
+# .terraform/
+# .serverless/
+# .cache/
