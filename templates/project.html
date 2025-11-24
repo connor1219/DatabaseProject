@@ -1,5 +1,5 @@
 <h2>Project {{ project_number }}</h2>
-
+{% if is_admin %}
 <form action="/projects/add_employee_to_project" method="POST">
     <input type="hidden" name="project_number" value="{{ project_number }}">
 
@@ -13,7 +13,7 @@
     <input type="number" name="hours" placeholder="Hours" min="0" step="1" required>
     <button type="submit">Add Hours To Employee</button>
 </form>
-
+{% endif %}
 <table>
     <thead>
         <tr>

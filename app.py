@@ -1,13 +1,19 @@
-from flask import Flask, render_template, session, request, url_for, redirect
+from flask import Flask, render_template, session, request, url_for, redirect, Response
 import psycopg
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash, generate_password_hash
 import os
+import csv
+import io
 
 app = Flask(__name__)
 app.secret_key = 'supersecret'
 
 load_dotenv()
+
+global_sort_option = None
+global_dept_filter = None
+global_search_query = None
 
 DATABASE_CONFIG = {
     "dbname": os.getenv("DB_NAME"),
@@ -38,8 +44,15 @@ def insert(query, args=()):
             conn.commit()
 
 def isLoggedIn():
-    if 'username' in session:
+    if 'username' in session and 'role' in session:
         return True
+    return False
+
+def isAdmin():
+    if session.get('role', 'admin'):
+        print("User is admin")
+        return True
+    print("User is not admin")
     return False
 
 def get_db_connection():
@@ -219,7 +232,9 @@ def login():
         password = request.form.get('password','')
         if login_user(username, password):
             session['username'] = username
-            session['role'] = 'viewer' #todo: fetch role from db
+
+            role = query_one("SELECT role FROM app_user WHERE username = %s", (username,))
+            session['role'] = role[0]
 
             return redirect(url_for('index'))
         else:
@@ -250,11 +265,19 @@ def employees():
     if not isLoggedIn():
         return redirect(url_for('login'))
     employees = get_employees()
+    global global_sort_option
+    global_sort_option = None
+    global global_dept_filter
+    global global_search_query
+    sort_option = ''
+    dept_filter = ''
+    search_query = ''
     if request.method == 'POST':
         # initially comes in as a string 
         sort_option = request.form.get('sortOption', '')
         if sort_option:
             sort_option = int(sort_option)
+            global_sort_option = sort_option
             if sort_option == 1:
                 employees = sorted(employees, key=lambda x: x[0])
                 # Sort by name ascending
@@ -266,18 +289,25 @@ def employees():
                 # Sort by hours ascending
             elif sort_option == 4:
                 employees = sorted(employees, key=lambda x: x[4], reverse=True)
-                # Sort by hours descending            
+                # Sort by hours descending          
         
         dept_filter = request.form.get('departmentFilter', '')
         if dept_filter:
+            global_dept_filter = dept_filter
             employees = [emp for emp in employees if emp[1] == dept_filter]
+            if global_search_query is not None:
+                employees = [emp for emp in employees if global_search_query.lower() in emp[0].lower()]
+
+
 
         search_query = request.form.get('searchQuery', '')
         if search_query:
+            global_search_query = search_query
             employees = [emp for emp in employees if search_query.lower() in emp[0].lower()]
+            if global_dept_filter is not None:
+                employees = [emp for emp in employees if emp[1] == global_dept_filter]
 
-
-    return render_template('employees.html', employees=employees)
+    return render_template('employees.html', employees=employees, sort_option=sort_option, dept_filter=dept_filter, search_query=search_query)
 
 @app.route('/portfolio', methods=['GET', 'POST'])
 def portfolio():
@@ -314,7 +344,7 @@ def project_detail(project_number):
 
     all_employees = get_all_employees()
 
-    return render_template('project.html', data=project_data, employees=all_employees, project_number=project_number)
+    return render_template('project.html', data=project_data, employees=all_employees, project_number=project_number, is_admin=isAdmin())
 
 @app.route('/projects/add_employee_to_project', methods=['POST'])
 def add_employee_to_project():
@@ -346,6 +376,8 @@ def managers_overview():
 def add_employee():
     if not isLoggedIn():
         return redirect(url_for('login'))
+    if not isAdmin():
+        return redirect(url_for('employees'))
 
     if request.method == 'POST':
         ssn = request.form['ssn']
@@ -377,6 +409,9 @@ def add_employee():
 def edit_employee(ssn):
     if not isLoggedIn():
         return redirect(url_for('login'))
+
+    if not isAdmin():
+        return redirect(url_for('employees'))
 
     if request.method == 'POST':
         address = request.form['address']
@@ -413,6 +448,9 @@ def delete_employee(ssn):
     if not isLoggedIn():
         return redirect(url_for('login'))
 
+    if not isAdmin():
+        return redirect(url_for('employees'))
+
     if request.method == 'GET':
         employee = query_one("""
             SELECT e.fname, e.minit, e.lname
@@ -445,6 +483,69 @@ def delete_employee(ssn):
     except psycopg.Error as e:
         return render_template('delete_employee.html', employee=full_name, ssn=ssn, error=e)
 
+@app.route('/employees/export', methods=['POST'])
+def export_employees():
+    exportCSV = request.form.get('exportCSV') == "1"
+    print(f"Export CSV value: {exportCSV}")
+    print(f"Global sort option: {global_sort_option}")
+    print(f"Global dept filter: {global_dept_filter}")
+    print(f"Global search query: {global_search_query}")
+    if exportCSV:
+        employees = get_employees()
+        if not employees:
+            return redirect(url_for('employees'))
+
+        if global_sort_option is not None:
+            print(f"Applying global sort option: {global_sort_option}")
+            if global_sort_option == 1:
+                employees = sorted(employees, key=lambda x: x[0])
+                # Sort by name ascending
+            elif global_sort_option == 2:
+                employees = sorted(employees, key=lambda x: x[0], reverse=True)
+                # Sort by name descending
+            elif int(global_sort_option) == 3:
+                print(f"Sorting by hours ascending")
+                employees = sorted(employees, key=lambda x: x[4])
+                # Sort by hours ascending
+            elif global_sort_option == 4:
+                employees = sorted(employees, key=lambda x: x[4], reverse=True)
+                # Sort by hours descending          
+        
+        if global_dept_filter is not None:
+            employees = [emp for emp in employees if emp[1] == global_dept_filter]
+
+        if global_search_query is not None:
+            employees = [emp for emp in employees if global_search_query.lower() in emp[0].lower()]
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow(['Full Name', 'Department', 'Number of Dependents', 'Number of Projects', 'Total Hours'])
+        for emp in employees:
+            writer.writerow(emp)
+        
+        data = output.getvalue()
+        output.close()
+
+        response = Response(data, mimetype='text/csv')
+        response.headers['Content-Disposition'] = 'attachment; filename=employees.csv'
+
+        return response
+    else:
+        return redirect(url_for('employees'))
+
+
+@app.route('/employees/clear_filters', methods=['POST'])
+def clear_employee_filters():
+    if not isLoggedIn():
+        return redirect(url_for('login'))
+    global global_sort_option
+    global_sort_option = None
+    global global_dept_filter
+    global_dept_filter = None
+    global global_search_query
+    global_search_query = None
+    return redirect(url_for('employees'))
 
 if __name__ == "__main__":
     app.run(debug=True)

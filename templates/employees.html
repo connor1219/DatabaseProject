@@ -10,6 +10,7 @@
     <th></th>
     <form action="/employees" method="POST">
         <select name="sortOption">
+            <option value="">---</option>
             <option value=1>Sort by name ascending</option>
             <option value=2>Sort by name descending</option>
             <option value=3>Sort by hours ascending</option>
@@ -20,6 +21,7 @@
 
     <form action="/employees" method="POST">
         <select name="departmentFilter">Clear Sort
+            <option value="">---</option>
             <option value="Administration">Administration</option>
             <option value="Engineering">Engineering</option>
             <option value="Finance">Finance</option>
@@ -33,6 +35,13 @@
     <form action="/employees" method="POST">
         <input name="searchQuery" placeholder="Employee Search"></input>
         <button type="submit">Search</button>
+    </form>
+    <form action="/employees/export" method="POST">
+        <button type="submit" name="exportCSV" value="1">Export to CSV</button>
+    </form>
+    <form>
+        <button type="submit" formaction="/employees/clear_filters" formmethod="post">Reset Filters</button>
+    </form>
     </tr>
     </thead>
     <tbody>
