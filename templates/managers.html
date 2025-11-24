@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Managers Overview</title>
+</head>
+<body>
+    <h2>Managers Overview</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Department</th>
+                <th>Manager</th>
+                <th>Employee Count</th>
+                <th>Total Hours</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dname, dnumber, manager, emp_count, total_hours in managers %}
+            <tr>
+                <td>{{ dname }} ({{ dnumber }})</td>
+                <td>{{ manager }}</td>
+                <td>{{ emp_count }}</td>
+                <td>{{ total_hours }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4">No departments found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

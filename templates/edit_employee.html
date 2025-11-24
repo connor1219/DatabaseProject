@@ -1,0 +1,15 @@
+<h1>Edit Employee</h1>
+<form action="/employees/edit/{{ ssn }}" method="POST">
+    <label>SSN (readonly):</label>
+    <input type="text" value="{{ ssn }}" readonly>
+
+    <label>Address:</label>
+    <input type="text" name="address" value="{{ address }}" required>
+
+    <label>Salary:</label>
+    <input type="number" name="salary" value="{{ salary }}" required>
+
+    <label>Department Number:</label>
+    <input type="number" name="dno" value="{{ dno }}" required>
+    <button type="submit">Update Employee</button>
+</form>
