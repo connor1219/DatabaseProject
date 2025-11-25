@@ -121,6 +121,20 @@ def get_employees():
     except Exception as e:
         print(f"Error fetching employees: {e}")
         return None
+
+def get_employees_custom(query):
+    try:
+        result = query_all(query)
+        employees = []
+        for fname, minit, lname, dept_name, num_dependents, num_projects, total_hours in result:
+            full_name = make_full_name(fname, minit, lname)
+
+            employees.append((full_name, dept_name, num_dependents, num_projects, total_hours))
+
+        return employees
+    except Exception as e:
+        print(f"Error fetching employees with custom query: {e}")
+        return None
         
 def get_portfolio():
     try:
@@ -276,29 +290,54 @@ def employees():
         # initially comes in as a string 
         sort_option = request.form.get('sortOption', '')
         if sort_option:
+            custom_sort_query = """
+                SELECT e.fname, e.minit, e.lname,
+                d.dname AS department_name,
+                COALESCE(dep.num_dependents, 0) AS num_dependents,
+                COALESCE(w.num_projects, 0) as num_projects,
+                COALESCE(w.total_hours, 0) AS total_hours
+
+                FROM Employee e
+                JOIN Department d ON e.dno = d.dnumber
+
+                LEFT JOIN (
+                    SELECT Essn, COUNT(*) AS num_dependents
+                    FROM Dependent
+                    GROUP BY Essn
+                ) dep ON e.ssn = dep.Essn
+
+                LEFT JOIN (
+                    SELECT Essn, COUNT(DISTINCT Pno) AS num_projects, SUM(Hours)::int AS total_hours
+                    FROM Works_On
+                    GROUP BY Essn
+                ) w ON e.ssn = w.Essn
+                
+            """
+
             sort_option = int(sort_option)
             global_sort_option = sort_option
             if sort_option == 1:
-                employees = sorted(employees, key=lambda x: x[0])
+                custom_sort_query += "ORDER BY e.lname ASC, e.fname ASC, e.minit ASC;"
                 # Sort by name ascending
             elif sort_option == 2:
-                employees = sorted(employees, key=lambda x: x[0], reverse=True)
+                custom_sort_query += "ORDER BY e.lname DESC, e.fname DESC, e.minit DESC;"
                 # Sort by name descending
             elif sort_option == 3:
-                employees = sorted(employees, key=lambda x: x[4])
+                custom_sort_query += "ORDER BY total_hours ASC;"
                 # Sort by hours ascending
             elif sort_option == 4:
-                employees = sorted(employees, key=lambda x: x[4], reverse=True)
-                # Sort by hours descending          
-        
+                custom_sort_query += "ORDER BY total_hours DESC;"
+                # Sort by hours descending
+            
+            # fetch employees with custom sort query
+            employees = get_employees_custom(custom_sort_query)
+
         dept_filter = request.form.get('departmentFilter', '')
         if dept_filter:
             global_dept_filter = dept_filter
             employees = [emp for emp in employees if emp[1] == dept_filter]
             if global_search_query is not None:
                 employees = [emp for emp in employees if global_search_query.lower() in emp[0].lower()]
-
-
 
         search_query = request.form.get('searchQuery', '')
         if search_query:
