@@ -25,7 +25,7 @@ def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not is_admin():
-            return redirect(url_for('index'))
+            return redirect(url_for('employees'))
         return f(*args, **kwargs)
     return wrapper
 
