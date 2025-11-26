@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Delete Employee{% endblock %}
+{% block content %}
+<div class="back-btn-container">
+    <button type="button" class="back-btn" onclick="window.location.href='{{ url_for('employees_manager') }}'">
+        ← Back to Employee List
+    </button>
+</div>
+
+<h1>Delete Employee</h1>
+
+<div class="info-box warning-box" style="margin-bottom: 30px;">
+    <strong>Warning:</strong> You are about to permanently delete this employee.</div>
+
+<div class="readonly-section">
+    <p><strong>SSN:</strong> {{ ssn }}</p>
+    <p><strong>Name:</strong> {{ employee }}</p>
+</div>
+
+<form method="post" style="margin-top: 30px;">
+    <div class="form-actions">
+        <button type="submit" class="delete-btn">Delete</button>
+        <button type="button" class="edit-btn" onclick="window.location.href='{{ url_for('employees_manager') }}'">Cancel</button>
+    </div>
+</form>
+{% endblock %}

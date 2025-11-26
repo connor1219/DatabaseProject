@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Projects Portfolio{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1 style="margin: 0;">Projects</h1>
+    <div>
+        <button type="button" class="export-btn" onclick="window.location.href='{{ export_url }}'">
+            Export to CSV
+        </button>
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="styled-table">
+        <thead>
+            <tr>
+                <th>
+                    <a href="?sort=name&order={% if current_sort == 'name' and current_order == 'asc' %}desc{% else %}asc{% endif %}">
+                        Project Name
+                        {% if current_sort == 'name' %}
+                            {% if current_order == 'asc' %}▲{% else %}▼{% endif %}
+                        {% endif %}
+                    </a>
+                </th>
+                <th>Owning Department</th>
+                <th class="center">
+                    <a href="?sort=headcount&order={% if current_sort == 'headcount' and current_order == 'asc' %}desc{% else %}asc{% endif %}">
+                        Headcount
+                        {% if current_sort == 'headcount' %}
+                            {% if current_order == 'asc' %}▲{% else %}▼{% endif %}
+                        {% endif %}
+                    </a>
+                </th>
+                <th class="center">
+                    <a href="?sort=total_hours&order={% if current_sort == 'total_hours' and current_order == 'asc' %}desc{% else %}asc{% endif %}">
+                        Total Hours
+                        {% if current_sort == 'total_hours' %}
+                            {% if current_order == 'asc' %}▲{% else %}▼{% endif %}
+                        {% endif %}
+                    </a>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if projects %}
+                {% for project in projects %}
+                <tr>
+                    <td>
+                   <a href="{{ url_for('project_details', project_id=project[0]) }}" class="project-link">
+                            {{ project[1] }}
+                        </a>
+                    </td>
+                    <td>{{ project[2] }}</td>
+                    <td class="center">
+                        {% if project[3] == 0 %}
+                            <span class="zero-value">0</span>
+                        {% else %}
+                            {{ project[3] }}
+                        {% endif %}
+                    </td>
+                    <td class="center">
+                        {% if project[4] == 0 %}
+                            <span class="zero-value">0</span>
+                        {% else %}
+                            {{ project[4] }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="4" class="no-data">No projects found.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="2"><strong>Total</strong></td>
+                <td class="center">
+                    <strong>{{ projects|sum(attribute=3) if projects else 0 }}</strong>
+                </td>
+                <td class="center">
+                    <strong>{{ projects|sum(attribute=4) if projects else 0 }}</strong>                </td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<p class="summary">
+    <strong>Total Projects:</strong> {{ projects|length }}
+</p>
+{% endblock %}

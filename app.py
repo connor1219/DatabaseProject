@@ -1,590 +1,299 @@
-from flask import Flask, render_template, session, request, url_for, redirect, Response
-import psycopg
-from dotenv import load_dotenv
+from config import SECRET_KEY, DEBUG
+from flask import Flask, render_template, session, request, url_for, redirect, flash, make_response
+from helper import (validate_registration, make_full_name, query_one, query_all, insert,
+                    get_db_connection, login_required, admin_required, validate_sort,
+                    build_employee_list)
 from werkzeug.security import check_password_hash, generate_password_hash
-import os
+import queries as Q
+import psycopg
 import csv
 import io
 
 app = Flask(__name__)
-app.secret_key = 'supersecret'
+app.secret_key = SECRET_KEY
 
-load_dotenv()
-
-global_sort_option = None
-global_dept_filter = None
-global_search_query = None
-
-DATABASE_CONFIG = {
-    "dbname": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_HOST"),
-    "port": os.getenv("DB_PORT")
-}
-
-def query_all(query, args=()):
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, args)
-            results = cur.fetchall()
-    return results
-
-def query_one(query, args=()):
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, args)
-            results = cur.fetchone()
-    return results
-
-def insert(query, args=()):
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, args)
-            conn.commit()
-
-def isLoggedIn():
-    if 'username' in session and 'role' in session:
-        return True
-    return False
-
-def isAdmin():
-    if session.get('role', 'admin'):
-        print("User is admin")
-        return True
-    print("User is not admin")
-    return False
-
-def get_db_connection():
-    conn = psycopg.connect(**DATABASE_CONFIG)
-    return conn
-
-def register_viewer(username, password):
-        try:
-            hash = generate_password_hash(password)
-            insert("INSERT INTO app_user (username, password_hash, role) VALUES (%s, %s, %s)", (username, hash, "viewer"))
-            return True
-        except Exception as e:
-            print(f"Error registering user: {e}")
-            return False
-
-def login_user(username, password):
-    try: 
-        result = query_one("SELECT password_hash FROM app_user WHERE username = %s", (username,))
-        if result and check_password_hash(result[0], password):
-            return True
-
-    except Exception as e:
-        print(f"Error logging in user: {e}")
-    return False
-
-def make_full_name(fname, minit, lname):
-    # string concat in sql is so much simpler
-    if minit:
-        return f"{fname} {minit}. {lname}"
-    return f"{fname} {lname}"
-
-def get_employees():
-    try:
-        result = query_all("""
-        SELECT e.fname, e.minit, e.lname,
-        d.dname AS department_name,
-        COALESCE(dep.num_dependents, 0) AS num_dependents,
-        COALESCE(w.num_projects, 0) as num_projects,
-        COALESCE(w.total_hours, 0) AS total_hours
-
-        FROM Employee e
-        JOIN Department d ON e.dno = d.dnumber
-
-        LEFT JOIN (
-            SELECT Essn, COUNT(*) AS num_dependents
-            FROM Dependent
-            GROUP BY Essn
-        ) dep ON e.ssn = dep.Essn
-
-        LEFT JOIN (
-            SELECT Essn, COUNT(DISTINCT Pno) AS num_projects, SUM(Hours)::int AS total_hours
-            FROM Works_On
-            GROUP BY Essn
-        ) w ON e.ssn = w.Essn
-
-        ORDER BY e.lname, e.fname, e.minit;
-        """)
-
-        employees = []
-        for fname, minit, lname, dept_name, num_dependents, num_projects, total_hours in result:
-            full_name = make_full_name(fname, minit, lname)
-
-            employees.append((full_name, dept_name, num_dependents, num_projects, total_hours))
-
-        return employees
-    except Exception as e:
-        print(f"Error fetching employees: {e}")
-        return None
-
-def get_employees_custom(query):
-    try:
-        result = query_all(query)
-        employees = []
-        for fname, minit, lname, dept_name, num_dependents, num_projects, total_hours in result:
-            full_name = make_full_name(fname, minit, lname)
-
-            employees.append((full_name, dept_name, num_dependents, num_projects, total_hours))
-
-        return employees
-    except Exception as e:
-        print(f"Error fetching employees with custom query: {e}")
-        return None
-        
-def get_portfolio():
-    try:
-        result = query_all("""
-        SELECT p.pname AS project_name,
-        pNumber AS project_number,
-        d.dname AS department_name,
-        COALESCE (COUNT(DISTINCT w.Essn), 0) AS headcount,
-        COALESCE (SUM(w.Hours), 0)::int AS total_hours
-
-        FROM Project p
-        JOIN Department d ON p.dnum = d.dnumber
-
-        LEFT JOIN Works_On w ON p.pnumber = w.Pno
-        GROUP BY p.pname, d.dname, p.pnumber
-        ORDER BY p.pname;
-        """)
-
-        return result
-    except Exception as e:
-        print(f"Error fetching portfolio: {e}")
-        return None
-
-def get_employees_on_project(project_number):
-    # all employees on the project, for the table
-    data = query_all("""
-        SELECT
-            e.fname, e.minit, e.lname,
-            w.hours
-        FROM Works_On w
-        JOIN Employee e ON w.Essn = e.ssn
-        WHERE w.Pno = %s
-        ORDER BY e.lname, e.fname, e.minit;
-    """, (project_number,))
-
-    formatted_data = []
-    for fname, minit, lname, hours in data:
-        full_name = make_full_name(fname, minit, lname)
-
-        formatted_data.append((full_name, hours))
-    return formatted_data
-
-def get_all_employees():
-    # literally all employees, for the dropdown
-    employees = query_all("""
-        SELECT ssn,
-        e.fname, e.minit, e.lname
-        FROM Employee e
-        ORDER BY e.lname, e.fname, e.minit;
-    """)
-
-    formatted_employees = []
-    for ssn, fname, minit, lname in employees:
-        full_name = make_full_name(fname, minit, lname)
-
-        formatted_employees.append((ssn, full_name))
-    return formatted_employees
-
-def get_managers_overview():
-    try:
-        rows = query_all("""
-            SELECT
-                d.dname,
-                d.dnumber,
-                m.fname   AS mgr_fname,
-                m.minit   AS mgr_minit,
-                m.lname   AS mgr_lname,
-                COALESCE(COUNT(DISTINCT e.ssn), 0) AS employee_count,
-                COALESCE(SUM(w.hours), 0)::int     AS total_hours
-            FROM Department d
-            LEFT JOIN Employee m
-                ON d.mgr_ssn = m.ssn
-            LEFT JOIN Employee e
-                ON e.dno = d.dnumber
-            LEFT JOIN Works_On w
-                ON w.essn = e.ssn
-            GROUP BY
-                d.dname, d.dnumber,
-                m.fname, m.minit, m.lname
-            ORDER BY d.dnumber;
-        """)
-
-        overview = []
-        for dname, dnumber, mfname, mminit, mlname, emp_count, total_hours in rows:
-            if mfname is None:
-                manager_name = "N/A"
-            else:
-                manager_name = make_full_name(mfname, mminit, mlname)
-
-            overview.append((dname, dnumber, manager_name, emp_count, total_hours))
-
-        return overview
-    except Exception as e:
-        print(f"Error fetching managers overview: {e}")
-        return None
-
-
-@app.route('/')
-def index():
-    if isLoggedIn():
-        return render_template('index.html', username=session['username'])
-    return redirect(url_for('login'))
+# -------------------------------------------------------------------------------- #
+# ------------------------------------- AUTH ------------------------------------- #
+# -------------------------------------------------------------------------------- #
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = ''
     if request.method == 'POST':
-        username = request.form.get('username', '')
-        password = request.form.get('password','')
-        if login_user(username, password):
-            session['username'] = username
-
-            role = query_one("SELECT role FROM app_user WHERE username = %s", (username,))
-            session['role'] = role[0]
-
-            return redirect(url_for('index'))
-        else:
+        username, password = request.form.get('username', ''), request.form.get('password', '')
+        try:
+            result = query_one(Q.GET_USER_AUTH, (username,))
+            if result and check_password_hash(result[0], password):
+                session['username'], session['role'] = username, result[1]
+                return redirect(url_for('employees'))
             error = 'Invalid credentials'
 
-    return render_template('login.html', error=error)
+        except Exception:
+            error = 'Invalid credentials'
+
+    return render_template('auth/login.html', error=error)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+
+    return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     error = ''
     if request.method == 'POST':
-        username = request.form.get('username','')
-        password = request.form.get('password','')
-        if register_viewer(username, password):
-            return redirect(url_for('login'))
+        username, password, role = request.form.get('username', ''), request.form.get('password', ''), request.form.get('role', '')
+        is_valid, validation_error = validate_registration(username, password, role)
+        if not is_valid:
+            error = validation_error
         else:
-            error = 'Registration failed'
-    
-    return render_template('register.html', error=error)
+            try:
+                insert(Q.INSERT_USER, (username, generate_password_hash(password), role))
+                return redirect(url_for('login'))
+            except Exception:
+                error = 'Registration failed. Please try again.'
+    return render_template('auth/register.html', error=error)
 
-@app.route('/logout', methods=['POST'])
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
+# -------------------------------------------------------------------------------- #
+# ----------------------------------- EMPLOYEES ---------------------------------- #
+# -------------------------------------------------------------------------------- #
 
-@app.route('/employees', methods=['GET', 'POST'])
+@app.route('/')
+@login_required
 def employees():
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-    employees = get_employees()
-    global global_sort_option
-    global_sort_option = None
-    global global_dept_filter
-    global global_search_query
-    sort_option = ''
-    dept_filter = ''
-    search_query = ''
-    if request.method == 'POST':
-        # initially comes in as a string 
-        sort_option = request.form.get('sortOption', '')
-        if sort_option:
-            custom_sort_query = """
-                SELECT e.fname, e.minit, e.lname,
-                d.dname AS department_name,
-                COALESCE(dep.num_dependents, 0) AS num_dependents,
-                COALESCE(w.num_projects, 0) as num_projects,
-                COALESCE(w.total_hours, 0) AS total_hours
+    dept_filter = request.args.get('department', '')
+    name_filter = request.args.get('name', '').strip()
+    sort_by, sort_order, sort_column, sort_direction = validate_sort(
+        request.args.get('sort', 'name'), request.args.get('order', 'asc'),
+        {'name': 'full_name', 'total_hours': 'total_hours'}
+    )
 
-                FROM Employee e
-                JOIN Department d ON e.dno = d.dnumber
+    query = Q.GET_EMPLOYEES_WITH_STATS
 
-                LEFT JOIN (
-                    SELECT Essn, COUNT(*) AS num_dependents
-                    FROM Dependent
-                    GROUP BY Essn
-                ) dep ON e.ssn = dep.Essn
+    params = []
 
-                LEFT JOIN (
-                    SELECT Essn, COUNT(DISTINCT Pno) AS num_projects, SUM(Hours)::int AS total_hours
-                    FROM Works_On
-                    GROUP BY Essn
-                ) w ON e.ssn = w.Essn
-                
-            """
+    if dept_filter:
+        query += " AND d.Dnumber = %s"
+        params.append(dept_filter)
 
-            sort_option = int(sort_option)
-            global_sort_option = sort_option
-            if sort_option == 1:
-                custom_sort_query += "ORDER BY e.lname ASC, e.fname ASC, e.minit ASC;"
-                # Sort by name ascending
-            elif sort_option == 2:
-                custom_sort_query += "ORDER BY e.lname DESC, e.fname DESC, e.minit DESC;"
-                # Sort by name descending
-            elif sort_option == 3:
-                custom_sort_query += "ORDER BY total_hours ASC;"
-                # Sort by hours ascending
-            elif sort_option == 4:
-                custom_sort_query += "ORDER BY total_hours DESC;"
-                # Sort by hours descending
-            
-            # fetch employees with custom sort query
-            employees = get_employees_custom(custom_sort_query)
+    query += f" ORDER BY {'e.Lname ' + sort_direction + ', e.Fname ' + sort_direction if sort_column == 'full_name' else sort_column + ' ' + sort_direction}"
 
-        dept_filter = request.form.get('departmentFilter', '')
-        if dept_filter:
-            global_dept_filter = dept_filter
-            employees = [emp for emp in employees if emp[1] == dept_filter]
-            if global_search_query is not None:
-                employees = [emp for emp in employees if global_search_query.lower() in emp[0].lower()]
+    try:
+        raw_employees = query_all(query, params)
+        employees = build_employee_list(raw_employees)
 
-        search_query = request.form.get('searchQuery', '')
-        if search_query:
-            global_search_query = search_query
-            employees = [emp for emp in employees if search_query.lower() in emp[0].lower()]
-            if global_dept_filter is not None:
-                employees = [emp for emp in employees if emp[1] == global_dept_filter]
+        if name_filter:
+            employees = [emp for emp in employees if name_filter.lower() in emp[1].lower()]
 
-    return render_template('employees.html', employees=employees, sort_option=sort_option, dept_filter=dept_filter, search_query=search_query)
+        departments = query_all(Q.GET_DEPARTMENTS)
 
-@app.route('/portfolio', methods=['GET', 'POST'])
-def portfolio():
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-    
-    projects = get_portfolio()
-    if request.method == 'POST':
-        # initially comes in as a string 
-        sort_option = request.form.get('sortOption', '')
-        if sort_option:
-            sort_option = int(sort_option)
-            if sort_option == 1:
-                projects = sorted(projects, key=lambda x: x[2])
-                # Sort by headcount ascending
-            elif sort_option == 2:
-                projects = sorted(projects, key=lambda x: x[2], reverse=True)
-                # Sort by headcount descending
-            elif sort_option == 3:
-                projects = sorted(projects, key=lambda x: x[3])
-                # Sort by hours ascending
-            elif sort_option == 4:
-                projects = sorted(projects, key=lambda x: x[3], reverse=True)
-                # Sort by hours descending            
+    except Exception:
+        employees, departments = [], []
 
-    return render_template('portfolio.html', projects=projects)
+    return render_template('employees/index.html', employees=employees, departments=departments,
+                         current_dept=dept_filter, current_name=name_filter,
+                         current_sort=sort_by, current_order=sort_order)
 
-@app.route('/projects/<int:project_number>')
-def project_detail(project_number):
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-
-    project_data = get_employees_on_project(project_number)
-
-    all_employees = get_all_employees()
-
-    return render_template('project.html', data=project_data, employees=all_employees, project_number=project_number, is_admin=isAdmin())
-
-@app.route('/projects/add_employee_to_project', methods=['POST'])
-def add_employee_to_project():
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-
-    project_number = int(request.form['project_number'])
-    employee_ssn = request.form['employee_ssn']
-    hours = float(request.form['hours'])
-
-    insert("""
-        INSERT INTO Works_On (Essn, Pno, Hours)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (Essn, Pno)
-        DO UPDATE SET Hours = Works_On.Hours + EXCLUDED.Hours;
-    """, (employee_ssn, project_number, hours))
-
-    return redirect(url_for('project_detail', project_number=project_number))
-
-@app.route('/managers')
-def managers_overview():
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-
-    managers = get_managers_overview()
-    return render_template('managers.html', managers=managers) 
+@app.route('/employees')
+@login_required
+def employees_manager():
+    raw_employees = query_all(Q.GET_EMPLOYEES_LIST)
+    employees = build_employee_list(raw_employees)
+    return render_template('employees/manager/index.html', employees=employees)
 
 @app.route('/employees/add', methods=['GET', 'POST'])
+@login_required
+@admin_required
 def add_employee():
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-    if not isAdmin():
-        return redirect(url_for('employees'))
+    try:
+        departments = query_all(Q.GET_DEPARTMENTS_LOWER)
+        supervisors_raw = query_all(Q.GET_SUPERVISORS)
+        supervisors = [(ssn, make_full_name(fname, minit, lname)) for ssn, fname, minit, lname in supervisors_raw]
+    except Exception:
+        departments, supervisors = [], []
 
     if request.method == 'POST':
-        ssn = request.form['ssn']
-        fname = request.form['fname']
-        minit = request.form.get('minit')
-        lname = request.form['lname']
-        address = request.form['address']
-        sex = request.form['sex']
-        salary = request.form['salary']
-        dno = request.form['dno']
+        fields = ['ssn', 'fname', 'minit', 'lname', 'bdate', 'address', 'sex', 'salary', 'super_ssn', 'dno']
+        values = tuple(request.form.get(f) or None for f in fields)
 
         try:
-            query_one("""
-                INSERT INTO employee (ssn, fname, minit, lname, address, sex, salary, dno)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (ssn, fname, minit, lname, address, sex, salary, dno))
-
-            return redirect(url_for('employees'))
+            insert(Q.INSERT_EMPLOYEE, values)
+            flash('Employee added successfully', 'success')
+            return redirect(url_for('employees_manager'))
 
         except psycopg.errors.UniqueViolation:
-            return render_template('add_employee.html', error="SSN already exists.")
+            return render_template('employees/manager/add.html',
+                                 error="SSN already exists.",
+                                 departments=departments,
+                                 supervisors=supervisors,
+                                 form_data=request.form)
 
         except psycopg.Error as e:
-            return render_template('add_employee.html', error=str(e))
+            return render_template('employees/manager/add.html',
+                                 error=str(e),
+                                 departments=departments,
+                                 supervisors=supervisors,
+                                 form_data=request.form)
 
-    return render_template('add_employee.html')
+    return render_template('employees/manager/add.html', departments=departments, supervisors=supervisors)
 
 @app.route('/employees/edit/<ssn>', methods=['GET', 'POST'])
+@login_required
+@admin_required
 def edit_employee(ssn):
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-
-    if not isAdmin():
-        return redirect(url_for('employees'))
-
     if request.method == 'POST':
-        address = request.form['address']
-        salary = request.form['salary']
-        dno = request.form['dno']
-
         try:
-            insert("""
-                UPDATE employee
-                SET address = %s, salary = %s, dno = %s
-                WHERE ssn = %s
-            """, (address, salary, dno, ssn))
-
-            return render_template('edit_employee.html', ssn=ssn, address=address, salary=salary, dno=dno)
-
+            insert(Q.UPDATE_EMPLOYEE, (request.form['address'], request.form['salary'], request.form.get('dno') or None, ssn))
+            flash('Employee updated successfully', 'success')
+            return redirect(url_for('employees_manager'))
         except psycopg.Error as e:
-            return render_template('edit_employee.html', ssn=ssn, address=address, salary=salary, dno=dno)
+            flash(f'Error updating employee: {str(e)}', 'error')
 
-    employee = query_one("""
-        SELECT address, salary, dno
-        FROM employee
-        WHERE ssn = %s
-    """, (ssn,))
+    employee = query_one(Q.GET_EMPLOYEE_BY_SSN, (ssn,))
+    if not employee:
+        flash('Employee not found', 'error')
+        return redirect(url_for('employees_manager'))
 
-    if employee:
-        address, salary, dno = employee
-        return render_template('edit_employee.html', ssn=ssn, address=address, salary=salary, dno=dno)
-    else:
-        return redirect(url_for('employees'))
-
+    departments = query_all(Q.GET_DEPARTMENTS)
+    return render_template('employees/manager/edit.html', employee=employee, departments=departments)
 
 @app.route('/employees/delete/<ssn>', methods=['POST', 'GET'])
+@login_required
+@admin_required
 def delete_employee(ssn):
-    if not isLoggedIn():
-        return redirect(url_for('login'))
+    employee = query_one(Q.GET_EMPLOYEE_NAME_BY_SSN, (ssn,))
+    if not employee:
+        flash('Employee not found', 'error')
+        return redirect(url_for('employees_manager'))
 
-    if not isAdmin():
-        return redirect(url_for('employees'))
+    full_name = make_full_name(*employee)
 
     if request.method == 'GET':
-        employee = query_one("""
-            SELECT e.fname, e.minit, e.lname
-            FROM employee e
-            WHERE e.ssn = %s
-        """, (ssn,))
-        full_name = make_full_name(employee[0], employee[1], employee[2])
+        return render_template('employees/manager/delete.html', ssn=ssn, employee=full_name)
 
-        return render_template('delete_employee.html', ssn=ssn, employee=full_name)
-    
     try:
-        employee = query_one("""
-            SELECT e.fname, e.minit, e.lname
-            FROM employee e
-            WHERE e.ssn = %s
-        """, (ssn,))
-        full_name = make_full_name(employee[0], employee[1], employee[2])
-        
-        insert("""
-            DELETE FROM employee
-            WHERE ssn = %s
-        """, (ssn,))
-
-        return redirect(url_for('employees'))
-
+        insert(Q.DELETE_EMPLOYEE, (ssn,))
+        flash(f'Employee {full_name} deleted successfully', 'success')
+        return redirect(url_for('employees_manager'))
     except psycopg.errors.ForeignKeyViolation:
-        error = "Cannot delete employee: They are still assigned to projects, have dependents listed, or are a manager/supervisor."
-
-        return render_template('delete_employee.html', employee=full_name, ssn=ssn, error=error)
+        flash('Cannot delete employee: They are still assigned to projects, have dependents listed, or are a manager/supervisor.', 'error')
+        return redirect(url_for('employees_manager'))
     except psycopg.Error as e:
-        return render_template('delete_employee.html', employee=full_name, ssn=ssn, error=e)
+        flash(f'Database error: {str(e)}', 'error')
+        return redirect(url_for('employees_manager'))
 
-@app.route('/employees/export', methods=['POST'])
-def export_employees():
-    exportCSV = request.form.get('exportCSV') == "1"
-    print(f"Export CSV value: {exportCSV}")
-    print(f"Global sort option: {global_sort_option}")
-    print(f"Global dept filter: {global_dept_filter}")
-    print(f"Global search query: {global_search_query}")
-    if exportCSV:
-        employees = get_employees()
-        if not employees:
-            return redirect(url_for('employees'))
+# -------------------------------------------------------------------------------- #
+# ----------------------------------- PROJECTS ----------------------------------- #
+# -------------------------------------------------------------------------------- #
 
-        if global_sort_option is not None:
-            print(f"Applying global sort option: {global_sort_option}")
-            if global_sort_option == 1:
-                employees = sorted(employees, key=lambda x: x[0])
-                # Sort by name ascending
-            elif global_sort_option == 2:
-                employees = sorted(employees, key=lambda x: x[0], reverse=True)
-                # Sort by name descending
-            elif int(global_sort_option) == 3:
-                print(f"Sorting by hours ascending")
-                employees = sorted(employees, key=lambda x: x[4])
-                # Sort by hours ascending
-            elif global_sort_option == 4:
-                employees = sorted(employees, key=lambda x: x[4], reverse=True)
-                # Sort by hours descending          
-        
-        if global_dept_filter is not None:
-            employees = [emp for emp in employees if emp[1] == global_dept_filter]
+@app.route('/projects')
+@login_required
+def projects():
+    sort_by, sort_order, sort_column, sort_direction = validate_sort(
+        request.args.get('sort', 'name'), request.args.get('order', 'asc'),
+        {'name': 'p.Pname', 'headcount': 'headcount', 'total_hours': 'total_hours'}
+    )
+    projects = query_all(Q.get_projects_query(sort_column, sort_direction))
+    export_url = url_for('export_projects_csv', sort=sort_by, order=sort_order)
+    return render_template('projects/index.html', projects=projects,
+                         current_sort=sort_by, current_order=sort_order, export_url=export_url)
 
-        if global_search_query is not None:
-            employees = [emp for emp in employees if global_search_query.lower() in emp[0].lower()]
-        
-        output = io.StringIO()
-        writer = csv.writer(output)
+@app.route('/projects/<int:project_id>', methods=['GET', 'POST'])
+@login_required
+def project_details(project_id):
+    if request.method == 'POST':
+        try:
+            insert(Q.INSERT_WORKS_ON, (request.form['employee_ssn'], project_id, float(request.form['hours'])))
+            flash('Employee assigned successfully', 'success')
+            return redirect(url_for('project_details', project_id=project_id))
+        except Exception as e:
+            flash(f'Error assigning employee: {str(e)}', 'error')
 
-        writer.writerow(['Full Name', 'Department', 'Number of Dependents', 'Number of Projects', 'Total Hours'])
-        for emp in employees:
-            writer.writerow(emp)
-        
-        data = output.getvalue()
-        output.close()
+    project = query_one(Q.GET_PROJECT_BY_ID, (project_id,))
+    if not project:
+        flash('Project not found', 'error')
+        return redirect(url_for('projects'))
 
-        response = Response(data, mimetype='text/csv')
-        response.headers['Content-Disposition'] = 'attachment; filename=employees.csv'
+    employees_data = query_all(Q.GET_PROJECT_EMPLOYEES, (project_id,))
+    employees_on_project = [(ssn, make_full_name(fname, minit, lname), hours)
+                           for ssn, fname, minit, lname, hours in employees_data]
 
-        return response
-    else:
-        return redirect(url_for('employees'))
+    all_employees_data = query_all(Q.GET_ALL_EMPLOYEES_NAMES)
+    all_employees = [(ssn, make_full_name(fname, minit, lname))
+                    for ssn, fname, minit, lname in all_employees_data]
+
+    return render_template('projects/detail.html', project=project,
+                         employees_on_project=employees_on_project, all_employees=all_employees)
 
 
-@app.route('/employees/clear_filters', methods=['POST'])
-def clear_employee_filters():
-    if not isLoggedIn():
-        return redirect(url_for('login'))
-    global global_sort_option
-    global_sort_option = None
-    global global_dept_filter
-    global_dept_filter = None
-    global global_search_query
-    global_search_query = None
-    return redirect(url_for('employees'))
+# -------------------------------------------------------------------------------- #
+# -------------------------- CSV/EXCEL EXPORT/IMPORT  ---------------------------- #
+# -------------------------------------------------------------------------------- #
 
-if __name__ == "__main__":
-    app.run(debug=True)
+@app.route('/projects/import/csv')
+@login_required
+def import_projects_csv():
+    return None
+
+@app.route('/projects/export/csv')
+@login_required
+def export_projects_csv():
+    sort_by, sort_order, sort_column, sort_direction = validate_sort(
+        request.args.get('sort', 'name'), request.args.get('order', 'asc'),
+        {'name': 'p.Pname', 'headcount': 'headcount', 'total_hours': 'total_hours'}
+    )
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(Q.get_projects_query(sort_column, sort_direction))
+                projects = cursor.fetchall()
+                column_names = [desc[0] for desc in cursor.description]
+    except Exception as e:
+        flash(f'Database error during CSV export: {str(e)}')
+        return 'An error occurred during export.', 500
+
+    si = io.StringIO()
+    writer = csv.writer(si)
+    writer.writerow(column_names)
+    writer.writerows(projects)
+
+    response = make_response(si.getvalue())
+    response.headers['Content-Disposition'] = 'attachment; filename=projects_sorted_export.csv'
+    response.mimetype = 'text/csv'
+    return response
+
+# -------------------------------------------------------------------------------- #
+# ----------------------------------- MANAGERS ----------------------------------- #
+# -------------------------------------------------------------------------------- #
+
+@app.route('/managers')
+@login_required
+def managers():
+    current_sort = request.args.get('sort', 'Dnumber')
+    current_order = request.args.get('order', 'asc')
+
+    raw_managers = query_all(Q.GET_MANAGERS_WITH_STATS)
+    managers = [(dnumber, dname, make_full_name(mfname, mminit, mlname) if mfname else 'N/A', headcount, total_hours)
+                for dnumber, dname, mfname, mminit, mlname, headcount, total_hours in raw_managers]
+
+    return render_template('managers/index.html', managers=managers,
+                         current_sort=current_sort, current_order=current_order)
+
+# -------------------------------------------------------------------------------- #
+# ------------------------------------ OTHER ------------------------------------- #
+# -------------------------------------------------------------------------------- #
+
+@app.route('/admin')
+@admin_required
+def admin():
+    users = query_all(Q.GET_ALL_USERS)
+    return render_template('auth/admin.html', users=users)
+
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template('page_not_found.html'), 404
+
+if __name__ == '__main__':
+    app.run(debug=DEBUG)

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<h1>Admin Dashboard</h1>
+<p class="overview-p">{{ session['username'] }} has admin privileges. Table shows all users.</p>
+
+<div class="table-container">
+    <table class="styled-table">
+
+    <thead>
+        <tr >
+            <th class="center">ID</th>
+            <th class="center">Username</th>
+            <th class="center">Role</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td class="center">{{ user[0] }}</td>
+            <td class="center">{{ user[1] }}</td>
+            <td class="center">{{ user[2] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
+

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Employee Management{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1 style="margin: 0;">Employee Management</h1>
+    <div>
+       <button type="button" class="add-btn"
+       {% if session.get('role') != 'admin' %}disabled{% endif %}
+       onclick="window.location.href='{{ url_for('add_employee') }}'">
+    Add
+</button>
+
+    </div>
+</div>
+
+{% if session.get('role') != 'admin' %}
+    <div class="info-box warning-box" style="margin-bottom: 20px;">
+        <strong>View Only:</strong> You do not have permission to add, edit, or delete employees.
+    </div>
+{% endif %}
+
+{% if employees %}
+<div class="table-container">
+    <table class="styled-table">
+            <thead>
+                <tr >
+                    <th class="center">SSN</th>
+                    <th class="center">Full Name</th>
+                    <th class="center">Address</th>
+                    <th class="center">Salary</th>
+                    <th class="center">Department</th>
+                    <th class="center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td class="center">{{ emp[0] }}</td>
+                    <td class="center">{{ emp[1] }}</td>
+                    <td class="center">{{ emp[2] or 'N/A' }}</td>
+                    <td class="center">
+                        {% if emp[3] %}
+                            ${{ "{:,.2f}".format(emp[3]) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td class="center">{{ emp[4] }}</td>
+                    <td class="center">
+                        <button
+                             type="button"
+                             class="edit-btn"
+                                    {% if session.get('role') != 'admin' %}disabled{% endif %}
+
+                            onclick="window.location.href='{{ url_for('edit_employee', ssn=emp[0]) }}'">
+        Edit
+    </button>
+                        <form method="post"
+                            action="{{ url_for('delete_employee', ssn=emp[0]) }}"
+                            onsubmit="return confirm('Are you sure you want to delete {{ emp[1] }}? This cannot be undone.');">
+                            <button type="button" class="delete-btn"
+                            {% if session.get('role') != 'admin' %}disabled{% endif %}
+                            onclick="window.location.href='{{ url_for('delete_employee', ssn=emp[0]) }}'">
+                        Delete
+                    </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="summary">
+        <strong>Total Employees:</strong> {{ employees|length }}
+    </p>
+{% else %}
+    <p class="no-data">
+        No employees found. <a href="{{ url_for('add_employee') }}">Add employee</a>
+    </p>
+{% endif %}
+{% endblock %}

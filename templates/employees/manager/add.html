@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Add Employee{% endblock %}
+{% block content %}
+<h1>Add New Employee</h1>
+<div class="back-btn-container">
+    <button type="button" class="back-btn" onclick="window.location.href='{{ url_for('employees_manager') }}'">
+        ← Back to Employee List
+    </button>
+</div>
+{% if error %}
+    <div class="error_container"><p>{{ error }}</p></div>
+{% endif %}
+<form method="post" class="add-form">
+    <div class="form-columns">
+        <div>
+            <div class="form-field">
+                <label for="ssn">SSN: <span class="required">*</span></label>
+                <input type="text" id="ssn" name="ssn" required maxlength="9" pattern="\d{9}" placeholder="123456789" value="{{ form_data.get('ssn') if form_data else '' }}">
+                <small class="field-hint">9 digits, no dashes</small>
+            </div>
+            <div class="form-field">
+                <label for="fname">First Name: <span class="required">*</span></label>
+                <input type="text" id="fname" name="fname" maxlength="20" pattern="[A-Za-zÀ-ÿ\s\-']+" required value="{{ form_data.get('fname') if form_data else '' }}">
+                <small class="field-hint">max 20 letters (spaces, hyphens, apostrophes allowed)</small>
+            </div>
+            <div class="form-field">
+                <label for="minit">Middle Initial: <span class="required">*</span></label>
+                <input type="text" id="minit" name="minit" maxlength="1" pattern="[A-Za-z]" required value="{{ form_data.get('minit') if form_data else '' }}">
+                <small class="field-hint">one letter required</small>
+            </div>
+            <div class="form-field">
+                <label for="lname">Last Name: <span class="required">*</span></label>
+                <input type="text" id="lname" name="lname" required maxlength="30" pattern="[A-Za-zÀ-ÿ\s\-']+" value="{{ form_data.get('lname') if form_data else '' }}">
+                <small class="field-hint">max 30 letters (spaces, hyphens, apostrophes allowed)</small>
+            </div>
+            <div class="form-field">
+                <label for="bdate">Birth Date:</label>
+                <input type="date" id="bdate" name="bdate" value="{{ form_data.get('bdate') if form_data else '' }}">
+            </div>
+        </div>
+        <div>
+            <div class="form-field">
+                <label for="sex">Sex: <span class="required">*</span></label>
+                <select id="sex" name="sex" required>
+                    <option value="">Select</option>
+                    <option value="M" {% if form_data and form_data.get('sex') == 'M' %}selected{% endif %}>Male</option>
+                    <option value="F" {% if form_data and form_data.get('sex') == 'F' %}selected{% endif %}>Female</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="address">Address: <span class="required">*</span></label>
+                <textarea id="address" name="address" rows="3" maxlength="50" required>{{ form_data.get('address') if form_data else '' }}</textarea>
+                <small class="field-hint">max 50 characters</small>
+            </div>
+            <div class="form-field">
+                <label for="salary">Salary: <span class="required">*</span></label>
+                <input type="number" id="salary" name="salary" step="1" min="0" placeholder="50000" required value="{{ form_data.get('salary') if form_data else '' }}">
+                <small class="field-hint">integer value required</small>
+            </div>
+            <div class="form-field">
+                <label for="dno">Department: <span class="required">*</span></label>
+                <select id="dno" name="dno" required>
+                    <option value="">Select Department</option>
+                    {% for dept in departments %}
+                        <option value="{{ dept[0] }}" {% if form_data and form_data.get('dno') == dept[0]|string %}selected{% endif %}>{{ dept[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+        <div class="form-field">
+                <label for="super_ssn">Supervisor:</label>
+                <select id="super_ssn" name="super_ssn">
+                    <option value="">No Supervisor</option>
+                    {% for sup in supervisors %}
+                        <option value="{{ sup[0] }}">{{ sup[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="add-btn">Add</button>
+        <button type="button" class="delete-btn" onclick="window.location.href='{{ url_for('employees_manager') }}'">Cancel</button>
+    </div>
+</form>
+
+
+{% endblock %}

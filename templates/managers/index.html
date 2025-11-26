@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Managers{% endblock %}
+
+{% block content %}
+<div style="">
+    <h1 style="">Managers</h1>
+  </div>
+
+
+<p class="overview-p">
+    Manager table overview.
+</p>
+
+{% if managers%}
+<div class="table-container">
+    <table class="styled-table">
+            <thead>
+                <tr style="">
+                    <th class="center">Department Name</th>
+                    <th class="center">Department Number</th>
+                    <th class="center">Managers Full Name</th>
+                    <th class="center">Department Employee Count</th>
+                    <th class="center">Department Total Hours</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for man in managers%}
+                <tr style="{% if loop.index % 2 == 0 %}{% endif %}">
+                    <td class="center">{{ man[0] }}</td>
+                    <td class="center">{{ man[1] }}</td>
+                    <td class="center">{{ man[2] or 'N/A' }}</td>
+                    <td class="center">
+                        {% if man[3] %}
+                            {{ "{:,.0f}".format(man[3]) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td class="center">
+                        {% if man[4] %}
+                            {{ "{:,.1f}".format(man[4]) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="summary">
+        <strong>Total Managers:</strong> {{ managers|length }}
+    </p>
+{% else %}
+    <p class="no-data">
+        No managers found.
+    </p>
+{% endif %}
+{% endblock %}

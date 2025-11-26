@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Employees{% endblock %}
+
+{% block content %}
+<form method="get" action="{{ url_for('employees') }}" class="filter-form">
+    <div class="form-grid">
+        <div>
+            <label for="department">Filter by Department:</label>
+            <select id="department" name="department">
+                <option value="">All Departments</option>
+                {% for dept in departments %}
+                    <option value="{{ dept[0] }}" {% if current_dept == dept[0]|string %}selected{% endif %}>
+                        {{ dept[1] }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="name">Search by Name:</label>
+            <input type="text" id="name" name="name" value="{{ current_name }}" placeholder="Enter name">
+        </div>
+
+        <div>
+            <button type="submit">Apply Filters</button>
+        </div>
+        <div>
+            <button type="button" class="clear-btn" onclick="window.location.href='{{ url_for('employees') }}'">Clear</button>
+        </div>
+    </div>
+
+    <input type="hidden" name="sort" value="{{ current_sort }}">
+    <input type="hidden" name="order" value="{{ current_order }}">
+</form>
+
+<div class="table-container">
+    <table class="styled-table">
+        <thead>
+            <tr>
+                <th>
+                    <a href="?sort=name&order={% if current_sort == 'name' and current_order == 'asc' %}desc{% else %}asc{% endif %}&department={{ current_dept }}&name={{ current_name }}">
+                        Employee Name
+                        {% if current_sort == 'name' %}
+                            {% if current_order == 'asc' %}▲{% else %}▼{% endif %}
+                        {% endif %}
+                    </a>
+                </th>
+                <th>Department</th>
+                <th class="center">Dependents</th>
+                <th class="center">Projects</th>
+                <th class="center">
+                    <a href="?sort=total_hours&order={% if current_sort == 'total_hours' and current_order == 'asc' %}desc{% else %}asc{% endif %}&department={{ current_dept }}&name={{ current_name }}">
+                        Total Hours
+                        {% if current_sort == 'total_hours' %}
+                            {% if current_order == 'asc' %}▲{% else %}▼{% endif %}
+                        {% endif %}
+                    </a>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if employees %}
+                {% for emp in employees %}
+                <tr>
+                    <td>{{ emp[1] }}</td>
+                    <td>{{ emp[2] }}</td>
+                    <td class="center">{{ emp[3] }}</td>
+                    <td class="center">{{ emp[4] }}</td>
+                    <td class="center">{{ emp[5] }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="5" class="no-data">No employees found matching your criteria.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<p class="summary"><strong>Total Employees:</strong> {{ employees|length }}</p>
+
+{% endblock %}

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}CIS3530 A4{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <nav class="nav_bar">
+    <div class="nav_container">
+    {% if 'username' in session %}
+    <div>
+        <a href="{{ url_for('employees') }}" class="{% if request.path == url_for('employees') %}active{% endif %}">Home</a>
+        <a href="{{ url_for('employees_manager') }}" class="{% if request.path == url_for('employees_manager') %}active{% endif %}">Employees</a>
+        <a href="{{ url_for('projects') }}" class="{% if request.path == url_for('projects') %}active{% endif %}">Projects</a>
+        <a href="{{ url_for('managers') }}" class="{% if request.path == url_for('managers') %}active{% endif %}">Managers</a>
+        {% if session.get('role') == 'admin' %}
+            <a href="{{ url_for('admin') }}" class="{% if request.path == url_for('admin') %}active{% endif %}">Admin</a>
+        {% endif %}
+        </div>
+        <div>
+            <a href="{{ url_for('logout') }}" class="{% if request.path == url_for('logout') %}active{% endif %}">Logout</a>
+
+        </div>
+    {% else %}
+    <div></div>
+    <div>
+    <a href="{{ url_for('login') }}" class="{% if request.path == url_for('login') %}active{% endif %}">Login</a>
+    <a href="{{ url_for('register') }}" class="{% if request.path == url_for('register') %}active{% endif %}">Register</a>
+        </div>
+    {% endif %}
+    </div>
+</nav>
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
