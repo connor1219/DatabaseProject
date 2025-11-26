@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 # 4. set up PostgreSQL database
  psql -U postgres
- CREATE DATABASE company_db;
+ CREATE DATABASE test_company_db;
 
 # 5. create config.py file
 echo SECRET_KEY = 'supersecret' > config.py
@@ -30,10 +30,10 @@ echo DB_HOST = 'localhost' >> config.py
 echo DB_PORT = '5432' >> config.py
 
 # 6. Initialize database schema
-psql -U postgres -d my_company_db -f company_v3.02.sql
+psql -U postgres -d test_company_db -f company_v3.02.sql
 
 # 7. Create application tables and indexes
-psql -U postgres -d my_company_db -f team_setup.sql
+psql -U postgres -d test_company_db -f team_setup.sql
 
 ```
 
@@ -54,7 +54,7 @@ pip install -r requirements.txt
 
 # 4. set up PostgreSQL database
  psql -U postgres
- CREATE DATABASE company_db;
+ CREATE DATABASE test_company_db;
 
 # 5. create config.py file
 echo SECRET_KEY = 'supersecret' > config.py
@@ -66,10 +66,10 @@ echo DB_HOST = 'localhost' >> config.py
 echo DB_PORT = '5432' >> config.py
 
 # 6. Initialize database schema
-psql -U postgres -d my_company_db -f company_v3.02.sql
+psql -U postgres -d test_company_db -f company_v3.02.sql
 
 # 7. Create application tables and indexes
-psql -U postgres -d my_company_db -f team_setup.sql
+psql -U postgres -d test_company_db -f team_setup.sql
 
 ```
 
