@@ -38,6 +38,8 @@ GET_SUPERVISORS = "SELECT Ssn, Fname, Minit, Lname FROM employee ORDER BY Fname,
 
 INSERT_EMPLOYEE = "INSERT INTO employee (ssn, fname, minit, lname, bdate, address, sex, salary, super_ssn, dno) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
+INSERT_EMPLOYEE_IMPORT = "INSERT INTO employee (ssn, fname, minit, lname, bdate, address, sex, salary, dno) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
+
 UPDATE_EMPLOYEE = "UPDATE employee SET address = %s, salary = %s, dno = %s WHERE ssn = %s"
 
 DELETE_EMPLOYEE = "DELETE FROM employee WHERE ssn = %s"
