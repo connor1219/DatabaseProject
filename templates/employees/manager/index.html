@@ -19,6 +19,22 @@
     </div>
 {% endif %}
 
+{% if session.get('role') == 'admin' %}
+<div class="info-box" style="margin-bottom: 20px;">
+    <h2 style="margin-top: 0; margin-bottom: 15px;">Import Employees from Excel</h2>
+    <p style="margin-bottom: 15px;">Upload an Excel (.xlsx) file to import multiple employees at once. The first row should contain column headers: Ssn, Fname, Minit, Lname, BDate, Address, Sex, Salary, Dno</p>
+    <form action="{{ url_for('import_data') }}" method="POST" enctype="multipart/form-data" style="max-width: 100%; background: transparent; padding: 0; box-shadow: none;">
+        <div class="form-field" style="margin-bottom: 15px;">
+            <label for="xlsx_file">Select .xlsx file: <span class="required">*</span></label>
+            <input type="file" id="xlsx_file" name="xlsx_file" accept=".xlsx" required>
+        </div>
+        <div class="form-actions" style="margin-top: 0;">
+            <button type="submit" class="add-btn">Import</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
 {% if employees %}
 <div class="table-container">
     <table class="styled-table">
