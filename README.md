@@ -35,6 +35,9 @@ psql -U postgres -d test_company_db -f company_v3.02.sql
 # 7. Create application tables and indexes
 psql -U postgres -d test_company_db -f team_setup.sql
 
+# 8. Run the application
+flask run
+
 ```
 
 ### Linux
@@ -70,6 +73,9 @@ psql -U postgres -d test_company_db -f company_v3.02.sql
 
 # 7. Create application tables and indexes
 psql -U postgres -d test_company_db -f team_setup.sql
+
+# 8. Run the application
+flask run
 
 ```
 
