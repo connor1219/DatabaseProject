@@ -6,4 +6,4 @@ CREATE TABLE app_user (
 );
 
 CREATE INDEX idx_employee_name ON Employee (Lname, Fname, Minit);
-CREATE INDEX idx_department_dno ON Department (Dno);
+CREATE INDEX idx_department_dno ON Department (Dnumber);
