@@ -75,4 +75,12 @@ psql -U postgres -d test_company_db -f team_setup.sql
 
 ## Index Rational
 
-- TODO
+```
+CREATE INDEX idx_employee_name ON Employee (Lname, Fname, Minit);
+```
+We chose this index as a few queries sort or retrieve employees by last name and first name. By indexing (Lname, Fname, Minit), the database can return results in sorted order directly from the index instead of scanning and sorting the entire table.
+
+```
+CREATE INDEX idx_employee_dno ON Employee (Dno)
+```
+Since a few queries filter or join on Employee.Dno, an index allows the database to quickly locate all employees belonging to a specific department instead of scanning the entire table. This makes the corresponding JOINs, WHERE filters, and GROUP BY operations much faster. 
