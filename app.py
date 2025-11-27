@@ -232,10 +232,122 @@ def project_details(project_id):
 # -------------------------- CSV/EXCEL EXPORT/IMPORT  ---------------------------- #
 # -------------------------------------------------------------------------------- #
 
-@app.route('/projects/import/csv')
+@app.route('/projects/import/csv', methods=['POST'])
 @login_required
 def import_projects_csv():
-    return None
+    if 'xlsx_file' not in request.files:
+        flash('No file uploaded', 'error')
+        return redirect(url_for('employees_manager'))
+    
+    file = request.files['xlsx_file']
+    
+    if file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('employees_manager'))
+    
+    if not file.filename.endswith('.xlsx'):
+        flash('File must be a .xlsx file', 'error')
+        return redirect(url_for('employees_manager'))
+    
+    try:
+        wb = load_workbook(file, read_only=True)
+        ws = wb.active
+        
+        headers = [cell.value for cell in ws[1]]
+        headers = [str(h).strip() if h else '' for h in headers]
+        
+        rows_data = []
+        # Starts on row 2 to skip headers
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if any(cell is not None for cell in row):
+                rows_data.append([cell for cell in row])
+        
+        if not rows_data:
+            flash('No data rows found in file', 'error')
+            return redirect(url_for('employees_manager'))
+        
+        expected_headers = ['Ssn', 'Fname', 'Minit', 'Lname', 'BDate', 'Address', 'Sex', 'Salary', 'Dno']
+        if not all(h in headers for h in expected_headers):
+            flash(f'Invalid format. Expected columns: {", ".join(expected_headers)}', 'error')
+            return redirect(url_for('employees_manager'))
+        
+        header_indices = {h: headers.index(h) for h in expected_headers}
+        
+        success_count = 0
+        error_messages = []
+        
+        for row_idx, row in enumerate(rows_data, start=2):
+            try:
+                values = tuple(
+                    row[header_indices[h]] if header_indices[h] < len(row) else None 
+                    for h in expected_headers
+                )
+                values = tuple(None if v == '' or v is None else v for v in values)
+                
+                # Salary is NOT NULL
+                if not values[7]:  
+                    error_messages.append(f'Row {row_idx}: Salary is required and cannot be empty')
+                    continue
+
+                # Dno is NOT NULL
+                if not values[8]:  
+                    error_messages.append(f'Row {row_idx}: Department number (Dno) is required and cannot be empty')
+                    continue
+                
+
+                processed_values = []
+                for i, v in enumerate(values):
+                    # Salary required, must be valid integer
+                    if i == 7:
+                        try:
+                            processed_values.append(int(float(v)))
+                        except (ValueError, TypeError):
+                            error_messages.append(f'Row {row_idx}: Salary must be a valid number, got "{v}"')
+                            break
+                     # Dno required, must be valid integer
+                    elif i == 8:
+                        try:
+                            processed_values.append(int(float(v)))
+                        except (ValueError, TypeError):
+                            error_messages.append(f'Row {row_idx}: Department number (Dno) must be a valid number, got "{v}"')
+                            break
+                    else:
+                        # Dates and other fields pass through as-is
+                        processed_values.append(v)  
+                
+                # Only insert if we didn't hit validation errors
+                if len(processed_values) == len(expected_headers):
+                    insert(Q.INSERT_EMPLOYEE_IMPORT, tuple(processed_values))
+                    success_count += 1
+            except psycopg.errors.UniqueViolation:
+                error_messages.append(f'Row {row_idx}: SSN already exists')
+            except psycopg.Error as e:
+                error_messages.append(f'Row {row_idx}: {str(e)}')
+        
+        # Prepare success/error messages
+        if success_count > 0:
+            success_msg = f'Successfully imported {success_count} employee(s)'
+            if error_messages:
+                success_msg += f'. {len(error_messages)} row(s) failed'
+                flash(success_msg, 'warning')
+                for err in error_messages[:10]:
+                    flash(err, 'error')
+            else:
+                flash(success_msg, 'success')
+        else:
+            if error_messages:
+                flash('No employees imported. Errors occurred:', 'error')
+                for err in error_messages[:10]:
+                    flash(err, 'error')
+            else:
+                flash('No employees imported', 'error')
+        
+        return redirect(url_for('employees_manager'))
+    
+    except Exception as e:
+        flash(f'Error processing file: {str(e)}', 'error')
+        return redirect(url_for('employees_manager'))
+    
 
 @app.route('/projects/export/csv')
 @login_required
@@ -298,122 +410,3 @@ def page_not_found(error):
 
 if __name__ == '__main__':
     app.run(debug=DEBUG)
-
-@app.route('/import', methods=['POST'])
-@admin_required
-def import_data():
-    if 'xlsx_file' not in request.files:
-        flash('No file uploaded', 'error')
-        return redirect(url_for('employees_manager'))
-    
-    file = request.files['xlsx_file']
-    
-    if file.filename == '':
-        flash('No file selected', 'error')
-        return redirect(url_for('employees_manager'))
-    
-    if not file.filename.endswith('.xlsx'):
-        flash('File must be a .xlsx file', 'error')
-        return redirect(url_for('employees_manager'))
-    
-    try:
-        # Load workbook
-        wb = load_workbook(file, read_only=True)
-        ws = wb.active
-        
-        # Get headers from first row
-        headers = [cell.value for cell in ws[1]]
-        headers = [str(h).strip() if h else '' for h in headers]
-        
-        # Parse data rows
-        rows_data = []
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            if any(cell is not None for cell in row):  # Skip completely empty rows
-                rows_data.append([cell for cell in row])
-        
-        if not rows_data:
-            flash('No data rows found in file', 'error')
-            return redirect(url_for('employees_manager'))
-        
-        # Expected columns are Ssn, Fname, Minit, Lname, BDate, Address, Sex, Salary, Dno
-        expected_headers = ['Ssn', 'Fname', 'Minit', 'Lname', 'BDate', 'Address', 'Sex', 'Salary', 'Dno']
-        if not all(h in headers for h in expected_headers):
-            flash(f'Invalid format. Expected columns: {", ".join(expected_headers)}', 'error')
-            return redirect(url_for('employees_manager'))
-        
-        header_indices = {h: headers.index(h) for h in expected_headers}
-        
-        # Process employee rows
-        success_count = 0
-        error_messages = []
-        
-        for row_idx, row in enumerate(rows_data, start=2):
-            try:
-                values = tuple(
-                    row[header_indices[h]] if header_indices[h] < len(row) else None 
-                    for h in expected_headers
-                )
-                # Convert empty strings to None
-                values = tuple(None if v == '' or v is None else v for v in values)
-                
-                # Validate required NOT NULL fields before processing
-                if not values[7]:  # Salary is NOT NULL
-                    error_messages.append(f'Row {row_idx}: Salary is required and cannot be empty')
-                    continue
-                if not values[8]:  # Dno is NOT NULL
-                    error_messages.append(f'Row {row_idx}: Department number (Dno) is required and cannot be empty')
-                    continue
-                
-                # Process values - dates come as YYYY-MM-DD strings
-                processed_values = []
-                for i, v in enumerate(values):
-                    if i == 7:  # Salary required, must be valid integer
-                        try:
-                            processed_values.append(int(float(v)))
-                        except (ValueError, TypeError):
-                            error_messages.append(f'Row {row_idx}: Salary must be a valid number, got "{v}"')
-                            break
-                    elif i == 8:  # Dno required, must be valid integer
-                        try:
-                            processed_values.append(int(float(v)))
-                        except (ValueError, TypeError):
-                            error_messages.append(f'Row {row_idx}: Department number (Dno) must be a valid number, got "{v}"')
-                            break
-                    else:
-                        processed_values.append(v)  # Dates and other fields pass through as-is
-                
-                # Only insert if we didn't hit validation errors
-                if len(processed_values) == len(expected_headers):
-                    # Use custom import query that doesn't include super_ssn
-                    insert(Q.INSERT_EMPLOYEE_IMPORT, tuple(processed_values))
-                    success_count += 1
-            except psycopg.errors.UniqueViolation:
-                error_messages.append(f'Row {row_idx}: SSN already exists')
-            except psycopg.Error as e:
-                error_messages.append(f'Row {row_idx}: {str(e)}')
-        
-        # Prepare success/error messages
-        if success_count > 0:
-            success_msg = f'Successfully imported {success_count} employee(s)'
-            if error_messages:
-                success_msg += f'. {len(error_messages)} row(s) failed'
-                flash(success_msg, 'warning')
-                # Show first 10 errors
-                for err in error_messages[:10]:
-                    flash(err, 'error')
-            else:
-                flash(success_msg, 'success')
-        else:
-            if error_messages:
-                flash('No employees imported. Errors occurred:', 'error')
-                for err in error_messages[:10]:
-                    flash(err, 'error')
-            else:
-                flash('No employees imported', 'error')
-        
-        return redirect(url_for('employees_manager'))
-    
-    except Exception as e:
-        flash(f'Error processing file: {str(e)}', 'error')
-        return redirect(url_for('employees_manager'))
-    
